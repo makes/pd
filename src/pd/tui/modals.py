@@ -1,9 +1,9 @@
 import sqlite3
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Input, Label, TextArea
+from textual.widgets import Button, Footer, Input, Label, TextArea
 
 from .. import db
 
@@ -82,7 +82,13 @@ class TextInputModal(ModalScreen[str | None]):
 
 class EditFieldModal(ModalScreen[str | None]):
     """Edits one scene main-pane field; a plain Input for short fields, a TextArea for
-    the multi-line description field."""
+    the multi-line description field.
+
+    TextArea swallows Enter as a newline, so it needs an explicit way to confirm.
+    Ctrl+S is offered as a shortcut, but terminals commonly intercept Ctrl+S for
+    XON/XOFF flow control before it ever reaches the app — so the Save/Cancel
+    buttons are the reliable path (reachable by mouse or by Tab + Enter).
+    """
 
     BINDINGS = [("escape", "cancel", "Cancel"), ("ctrl+s", "submit", "Save")]
 
@@ -98,13 +104,28 @@ class EditFieldModal(ModalScreen[str | None]):
             editor = TextArea(self.current_value, id="field-editor")
         else:
             editor = Input(value=self.current_value, id="field-editor")
-        yield Vertical(Label(self.label), editor, id="edit-field-dialog")
+        yield Vertical(
+            Label(self.label),
+            editor,
+            Horizontal(
+                Button("Save", id="save-button", variant="primary"),
+                Button("Cancel", id="cancel-button"),
+            ),
+            id="edit-field-dialog",
+        )
+        yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#field-editor").focus()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.dismiss(event.value)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save-button":
+            self.action_submit()
+        else:
+            self.action_cancel()
 
     def action_submit(self) -> None:
         editor = self.query_one("#field-editor")

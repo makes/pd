@@ -17,6 +17,7 @@ class CreateView(Vertical):
         ("i", "set_start", "Set start"),
         ("o", "set_end", "Set end"),
         ("s", "set_screenshot", "Set screenshot"),
+        ("enter", "create_clip", "Create scene"),
     ]
 
     can_focus = True
@@ -34,6 +35,7 @@ class CreateView(Vertical):
     def compose(self) -> ComposeResult:
         yield Static(id="status")
         yield Static(id="marks")
+        yield Static(id="info")
 
     def on_mount(self) -> None:
         self.set_interval(0.2, self._poll)
@@ -69,10 +71,12 @@ class CreateView(Vertical):
     def _refresh_display(self) -> None:
         status = self.query_one("#status", Static)
         marks = self.query_one("#marks", Static)
+        info = self.query_one("#info", Static)
 
         if not self.controller.is_running:
             status.update("Press 'p' to start player.")
             marks.update("")
+            info.update("")
             return
 
         path = self.controller.connection.get_property("path")
@@ -90,6 +94,30 @@ class CreateView(Vertical):
             f"end: {fmt(self.end_ts)}   "
             f"screenshot: {fmt(self.screenshot_ts)}"
         )
+
+        info.update(self._info_text())
+
+    def _info_text(self) -> str:
+        lines = []
+        if self.start_ts is not None and self.end_ts is not None:
+            duration = self.end_ts - self.start_ts
+            if duration > 0:
+                lines.append(f"Duration: {timefmt.format_seconds(duration)}")
+            else:
+                lines.append("Duration: end must be after start")
+
+        if self.start_ts is not None and self.end_ts is not None and self.screenshot_ts is not None:
+            error = self._validation_error()
+            lines.append(error if error else "Ready — press Enter to create scene.")
+
+        return "\n".join(lines)
+
+    def _validation_error(self) -> str | None:
+        if not self.start_ts < self.end_ts:
+            return "start must be before end"
+        if not self.start_ts <= self.screenshot_ts <= self.end_ts:
+            return "screenshot must be between start and end"
+        return None
 
     def action_start_player(self) -> None:
         if self.controller.is_running:
@@ -117,17 +145,14 @@ class CreateView(Vertical):
             return
         setattr(self, attr, pos)
         self._refresh_display()
-        self._maybe_create_clip()
 
-    def _maybe_create_clip(self) -> None:
+    def action_create_clip(self) -> None:
         if self.start_ts is None or self.end_ts is None or self.screenshot_ts is None:
             return
 
-        if not self.start_ts < self.end_ts:
-            self._show_error("start must be before end")
-            return
-        if not self.start_ts <= self.screenshot_ts <= self.end_ts:
-            self._show_error("screenshot must be between start and end")
+        error = self._validation_error()
+        if error:
+            self._show_error(error)
             return
 
         source_path = self.controller.connection.get_property("path")
@@ -149,4 +174,4 @@ class CreateView(Vertical):
 
     def _show_error(self, message: str) -> None:
         self.app.bell()
-        self.query_one("#marks", Static).update(f"error: {message}")
+        self.query_one("#info", Static).update(f"error: {message}")

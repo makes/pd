@@ -24,6 +24,21 @@ class PdApp(App):
             with TabPane("Create", id="create-tab"):
                 yield CreateView(self.root, self.mpv, self.conn)
 
+    def on_mount(self) -> None:
+        self.query_one(ListTab).action_focus_scenes()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        # Widgets can't reliably self-focus from their own on_show: focusing a widget
+        # while its pane isn't yet the active one can itself fight the tab switch and
+        # revert TabbedContent.active back to the previous tab. Handling focus/reload
+        # centrally here, once activation has actually completed, avoids that.
+        if event.pane.id == "list-tab":
+            list_tab = self.query_one(ListTab)
+            list_tab.reload_scenes()
+            list_tab.action_focus_scenes()
+        elif event.pane.id == "create-tab":
+            self.query_one(CreateView).focus()
+
     def on_unmount(self) -> None:
         self.mpv.close()
         self.conn.close()

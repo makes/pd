@@ -46,9 +46,6 @@ class ListTab(Horizontal):
     def on_mount(self) -> None:
         self.reload_scenes()
 
-    def on_show(self) -> None:
-        self.reload_scenes()
-
     def reload_scenes(self, select_scene_id: str | None = None) -> None:
         scene_list = self.query_one("#scene_list", BrowseList)
         scene_list.clear_options()
